@@ -1,0 +1,938 @@
+Documentation
+
+Topic                                       Line number (Sublime text)
+1)	Interface Code								12
+2)	Working of “Create Database” option			178
+3)	Working of “Update Database” option			679
+4)	Searching image with sentences				689
+5)	Mouse Events								840
+6)	Keyboard Events								916
+
+
+1)	INTERFACE CODE
+
+
+
+The Desktop Application is built using PyQt5. Following tutorials have been referred for learning PyQt5 -
+http://zetcode.com/gui/pyqt5/
+
+
+The code of interface and its functionality is in file mp_app/im2txt/im2txt/mp_app.py
+This is the entering point -
+
+-----------------------------------------------------------------------------------------------------------------------------
+
+Line 489
+
+if __name__ == '__main__':
+app = QApplication(sys.argv)
+ex = Example()
+sys.exit(app.exec_())
+
+-----------------------------------------------------------------------------------------------------------------------------
+
+The first line initialises the application. Example is the main class consisting of all the interface objects. The code creates a new instance of class Example which results in a call to its constructor.
+app.exec_() runs the main loop and returns status code on exit to sys.exit which quits the application. The application can be closed by x button or it can close on itself on encountering an error which is not handled.
+
+In PyQt5, interface can be designed using layout and widget classes. Three types of layouts have been used -
+
+Vertical Layout – Arranges widgets in vertical manner.
+Horizontal Layout – Arranges widgets in horizontal manner.
+Grid Layout – Arranges widgets in grid manner.
+
+Widgets can be pushbutton, labels , textbox, scrollbars etc.
+
+Example class - 
+
+-----------------------------------------------------------------------------------------------------------------------------
+
+Line 42
+
+class Example(QWidget):
+
+def __init__(self): 	#constructor
+super(Example,self).__init__()
+self.initUI()
+
+-----------------------------------------------------------------------------------------------------------------------------
+
+Example class Inherits Qwidget class. The constructor of parent class (QWidget) is called. And then initUI is called which consists of interface code.
+
+-----------------------------------------------------------------------------------------------------------------------------
+
+Line 93
+
+def initUI(self):
+
+self.dr = os.path.dirname(os.path.abspath(__file__))
+self.fname = "-1"
+self.stop_words = ["a","about","above" .... "yourselves"]
+self.formats = ['.jpg','.JPG','.jpeg','.JPEG']
+self.init_data()
+
+select_file = QPushButton('choose file (optional)')	# creates pushbutton
+self.file_lbl = Qlabel()					# creates label to be displayed on rigth side of button. (both will be							# put in a horizontal layout)	 								 
+
+crd = QPushButton('create database')
+crd.clicked.connect(lambda: self.crdb(self.file_lbl.text())) 	# Connects button click to self.crd function and passes									 # self.file_lbl.text() to it as parameter.
+self.crd_label = Qlabel(self)					
+
+up = QPushButton("update database.")
+up.clicked.connect(lambda: self.crdb(self.file_lbl.text(),True))
+self.up_lbl = QLabel()
+
+select_file.clicked.connect(self.showDialog)
+sq = QPushButton("search query")
+self.qle = QlineEdit()				#Input for search query
+sq.clicked.connect(self.search)		# calls self.search() when “search query” is clicked
+self.qle.returnPressed.connect(sq.click)	# executes the same function on pressing enter (cursor being in textbox)
+                                     # which is executed when  and “search query ” is clicked 
+                                                                # i.e (it calls self.search() when enter is pressed and cursor is in textbox)
+
+						
+self.faces = QHBoxLayout()		# horizontal face menu
+self.load_faces()			# loads faces in the menu
+
+crd_box = QHBoxLayout()		# adds “create database” button and label in horizontal layout
+crd_box.addWidget(crd)		
+crd_box.addWidget(self.crd_label)
+
+hbox = QHBoxLayout()
+hbox.addWidget(select_file)
+hbox.addWidget(self.file_lbl)
+
+hbox1 = QHBoxLayout()
+hbox1.addWidget(sq)
+hbox1.addWidget(self.qle)
+
+hbox2 = QHBoxLayout()
+hbox2.addWidget(up)
+hbox2.addWidget(self.up_lbl)
+
+vbox = QVBoxLayout()			# all the horizontal layouts are stacked in a vertical layout 			
+vbox.addLayout(hbox)
+vbox.addLayout(crd_box)
+vbox.addLayout(hbox2)
+vbox.addLayout(hbox1)
+vbox.addLayout(self.faces)
+
+self.scrollArea = QscrollArea(self)					# creates scrollarea object			
+self.scrollArea.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+self.container = Qwidget()						# creates a new widget
+self.grid = QgridLayout()			# creates grid Layout ( in which results are 	displayed )		
+self.container.setLayout(self.grid)		# adds grid to the widget
+self.scrollArea.setWidgetResizable(True)	
+self.scrollArea.setWidget(self.container)	# adds scrollbar to the widget containing grid.
+vbox.addWidget(self.scrollArea)
+self.vwid = Qwidget()				# parent widget containing vertical layout
+self.vwid.setLayout(vbox) 			
+self.vwid.setWindowTitle('MP')
+self.vwid.setWindowState(Qt.WindowMaximized)
+self.vwid.setFocusPolicy(Qt.StrongFocus)	
+self.vwid.keyPressEvent = self.keyPressEvent		# to handle keyboard events
+self.vwid.mousePressEvent = self.mousePressEvent 	# to handle mouse events
+self.vwid.show() 						# displays the entire interface on screen
+
+-----------------------------------------------------------------------------------------------------------------------------
+
+
+self.dr (can be accessed from any function in class because initialised as object variable) stores the path of above python file (mp_app.py) .
+
+Self.fname is initialised to -1. It is used to store the path selected with “choose file (optional)” option.
+
+Self.stop words consists of list of words that are removed from search query to find the results. This is important because if anyone searches for let’s say “ a person eating sandwich ” all the images in database will be returned as all the captions consist of the word “a”.
+
+self.init_data()
+This function loads pickled list and dictionaries.
+“photos.pk” consists of list of all the image paths (that application finds when“create database” or “update database” is clicked) on computer.
+“ploc.pk” consists a dictionary mapping names of photos to their locations.
+“open.pk” consists of dictionary mapping image paths to their captions.
+
+-----------------------------------------------------------------------------------------------------------------------------
+
+Line 299
+
+def init_data(self):
+if os.path.isfile("photos.pk"):
+file = open("photos.pk","rb")
+self.photos = pickle.load(file)
+file.close()
+
+if os.path.isfile("ploc.pk"):
+file = open("ploc.pk","rb")
+self.ploc = pickle.load(file)
+file.close()
+
+im_cap = "open.pk"
+#print(im_cap)
+if os.path.isfile(im_cap):
+file = open(im_cap,"rb")
+self.data = pickle.load(file)
+file.close()
+
+-----------------------------------------------------------------------------------------------------------------------------
+
+The rest of the code creates buttons, labels, arranges them in proper layout. Comments have been added in the code above to explain its functionality.
+
+
+2) Create Database
+
+When “create database” option is clicked, the app finds all the images in computer, runs image captioning algorithm and face detection algorithm on them, saves crops of faces identified, finds embeddings corresponding to each face and clusters the embeddings.
+On clicking “create databse” button, self.crdb function is called with self.file_label.text() as parameter (folder_path). If a file is chosen with “select folder” option then the path of folder is the parameter, otherwise by default the arguement is “None”.
+
+
+-----------------------------------------------------------------------------------------------------------------------------
+
+Line 215
+
+def crdb(self,folder_path=None,upd=False): 
+        if upd:
+            name = self.up_lbl
+        else:
+            name = self.crd_label
+            
+        self.msg(name,"searching for images...")
+        
+        que = Queue()
+        start_time = time.time()
+        p = Process(target=find_images,args=(que,folder_path,))
+        p.start()
+        fold = que.get()
+        self.ploc = {}
+        photos = []
+        if upd:
+            new_photos = []
+
+        while not fold == "end":
+            if not que.empty():
+                photos.append(fold)
+                ind = fold.rfind("/")
+                orig_name = fold[ind+1:]
+                self.ploc[orig_name] = fold
+                if upd and fold not in self.photos:
+                    new_photos.append(fold)
+                fold = que.get()
+
+        p.join()
+        print(time.time()-start_time)
+
+
+        if upd:
+            print(self.up_lbl,"found " + str(len(new_photos) )+ " new photos.")
+            self.msg(self.up_lbl,"found " + str(len(new_photos) )+ " new photos.")
+        else:
+            self.msg(self.crd_label,"found " + str(len(photos)) + " photos.")
+        
+        with open("photos.pk","wb") as f:
+            pickle.dump(photos,f)
+
+        with open("ploc.pk","wb") as f:
+            pickle.dump(self.ploc,f)
+        
+
+        self.msg(name,"runnning image captioning and face detection algorithm ...")
+
+        if upd:
+            if len(new_photos) > 0:
+                print("here")
+                
+                p1 = Process( target=rf.main, args=(new_photos,True) )
+                p2 = Process( target=fca.main_align, args=(new_photos,) )
+
+                p1.start()
+                p2.start()
+                p1.join()
+                p2.join()
+        
+                print(time.time()-start_time)
+                fsv.main_embed(True)
+        
+        else:
+            
+            p1 = Process( target=rf.main, args=(photos,) )
+            p2 = Process( target=fca.main_align, args=(photos,) )
+
+            p1.start()
+            p2.start()
+            p1.join()
+            p2.join()
+            fsv.main_embed()
+        
+        
+        print(time.time()-start_time)
+        
+        fsac.cluster_faces()
+        self.init_data()
+        self.load_faces()        
+            
+        self.msg(name,"done.")
+
+ 
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+The function also has an argument upd which by default is false. If it is set to true it updates the database i.e finds all images on computer, then compares the path of all images with those stored in pickled files (database). The images whose path doesn’t exist are new images. The algorithm is then run for only new images and new data is merged with old data. 
+
+The “name” variable is used to refer to label of “create database” (in case it is clicked) or “update database” (in case it is clicked). If “name” variable was not used then common messages like “searching for images” would have required if-else statements to display the message on correct label.		
+
+Self.msg displays the given text on the given label. (both are given as parameters)
+
+-----------------------------------------------------------------------------------------------------------------------------
+Line 318
+
+    def msg(self,lab,str):
+        lab.setText(str)
+        app.processEvents()    
+
+-----------------------------------------------------------------------------------------------------------------------------
+
+If “create database” is clicked, application starts searching for images. If any message has to be printed on screen, lab.setText(str) will print the message but only after the function is done searching all the images. app.processEvents() stops searching for images (main process is stopped) and all the pending processes such as display of message on label are carried out and then main process returns to its execution. Therefore app.processEvents() is required to display status of application while the search/image captioning/face detection is running. 
+
+The function uses “multiprocessing” library of python to speed up computation. “Processing” and “Queue” modules of multiprocessing library have been used in the project. “Processing” takes two arguments - 1) function (on which multiprocessing has to be applied), 2) the arguments of the function. Use of multiprocessing library drastically reduces the time taken to find images in the computer.
+
+The “find_images” is called with “Processing” module for searching images. The arguments passed are -  folder_path (which can be a path or “None” if nothing is selected with “choose file” option ) and a queue (which belongs to multiprocessing library). This queue is used to share data between multiple processes. “self.crdb” calls “find_images” and passes que (multiprocessing queue) as parameter. “Find_images” finds image paths and enques them on que. “Self.crdb” waits for the que to get enqueued. When que gets enqueued, self.crdb deques it and appends image path to a python list. When “find_images” finishes, it enqueues “end” on the que. “Self.crdb” stops waiting after dequeuing “end” and proceeds to execute next instructions. 
+This could have been done in a simpler way without enqueue-dequeue operations, if a global list would have been used directly to store image paths in find_images. This method was tried but it gave some errors, therefore above mentioned method was used.  Using global list with multiprocessing module may give some errors.
+
+
+
+
+-----------------------------------------------------------------------------------------------------------------------------
+
+Line 447
+
+def find_images(que,folder_path=None): 
+    q = queue.Queue()
+    formats = ['.jpg','.JPG','.jpeg','.JPEG']
+opt=["/home/","A:/","B:/","C:/","D:/","E:/","F:/","G:/","H:/","I:/","J:/","K:/","L:/","M:/","N:","O:/","P:/","Q:/","R:/","S:/","T:/","U:/","V:/","W:/","X:/","Y:/","Z:/"]
+    
+    if not folder_path:
+        if platform.system() == 'Linux':
+            q.put("/home/")
+        elif platform.system() == 'Windows':
+            for folder in get_drives():  
+                q.put(folder)
+    else:
+        q.put(folder_path) 
+
+    while not q.empty():
+        fold = q.get()
+        if os.path.isdir(fold) == True :
+            try:
+                    
+                for folder in os.listdir(fold):
+                    if fold in opt :
+                        tmp = fold + folder
+                    else:
+                        tmp = fold + "/" +folder  
+                    #print(tmp)
+                    q.put(tmp)
+            except Exception as e:
+                print("error") 
+        else:
+            ext = ""        
+            if fold[-4:-3]  == "." :
+                ext = fold[-4:]
+            elif fold[-5:-4] == "." :
+                ext = folder[-5:]
+        
+            if ext in formats:
+                
+                que.put(fold)
+    
+    que.put("end")
+
+-----------------------------------------------------------------------------------------------------------------------------
+
+
+Note - Two queues have been used in find_images. One as a parameter - “que” which is a module in multiprocessing library and other - “q” which is a normal python queue.
+
+To find the images Breadth First Search (BFS) has been implemented in “find_images” function.“Find_images” first checks the OS of the user and decides initial folders to be pushed in queue accordingly.In windows, all the available drives are pushed in a queue initially (get_drives function finds all the drives in computer)  and in ubuntu “/home/” directory is pushed to the queue initially. 
+Then a while loop is run until queue becomes empty and following instructions are executed - 
+
+Get a pah by Dequeue (q.get()) method.
+Check if the path is a file or folder.
+If path is a folder, all the files/folder in the current folder are appended to the queue.
+If path is a file, then it is checked whether its extension is in ['.jpg','.JPG','.jpeg','.JPEG'] (im2txt supports only jpeg images). If so, the file is enqueued in multiprocessing queue.
+
+When while loop is over, “end” keyword is enqueued to the multiprocessing queue. During this process, in self.crdb function the multiprocessing queue is continuously checked. If it is not empty and it does not contain “end”, it is dequeued and appended in the list “photos”. A dictionary “self.ploc” is also initialised. The names of photos are separated from their paths and name to path mapping is stored in “self.ploc” dictionary. In case “upd” is true (“photos” already exists as “self.photos” and contains list of image paths found the last time “create database” or “update database” was selected ), it is checked whether the image path exists in “self.photos” (which was initialised in self.init_data() function called from self.initUI() function ). If it does not exist, the path is appended in new_photos list (which is declared only if “upd” is true).
+
+p.join() waits for all the sub-processes (multiple process that execute find_images) to complete.
+
+After that status of appropriate label is updated to “running image captioning ...”. The “photos” list consisting paths to all the images is pickled in “photos.pk” file and “self.ploc” dictionary mapping image names to their paths is pickled in “ploc.pk” file.
+
+If “upd” is false - 
+
+After images have been found, image captioning and face detection are carried out simultaneously. The python files consisting the codes are imported as rf (run_inference.py) and fca (facenet.src.align.align_mp). Again, multiprocessing module is used. Image captioning is assigned to one process and face detection is assigned to other process. Both the functions take list of the photos ”photos” ( formed earlier ) as arguements. “Run_inference.py” divides the image paths in batches, finds captions for the images and stores the image path to caption mapping in a dictionary “result”. The dictionary is then pickled with the name “open.pk”. The face detection algorithm makes a new temporary folder in mp_app/im2txt/facenet/src/align/ called “tmp” ( which is deleted after clustering ). The face detection algorithm detects all the faces in a given image, crops the faces having probability > 0.95 and resolution > 80x80, and saves them in “tmp” directory in the format - name_i.png , where name is the name of image and i is the ith face identified in the image.  
+When the two processes are complete, the python script that calculates the embeddings corresponding to face crops is called ( fsv.main_embed() fsv - facenet.src.validate_on_lfw.py ). The function divides the images in “tmp” folder into batches and passes them through a CNN which generates 128-dimensional embeddings for the image. The name (name_i.png) and corresponding embedding are stored in a dictionary and then pickled with name “pte.pk”.
+After that clustering algorithm is called ( fsac.cluster_faces() , fsac - facenet.src.align.clustering.py ). Three algorithms have been written in clustering.py file. Out of them cluser_faces() is the most efficient in terms of time and results.
+
+-----------------------------------------------------------------------------------------------------------------------------
+
+mp_app/im2txt/facenet/src/align/clustering.py
+
+def cluster_faces(upd=False):
+	start_time = time.time()
+	dr = os.path.dirname(os.path.abspath(__file__))
+	
+	if upd:
+		file = open("ue.pk","rb")
+	else:
+		file = open("pte.pk","rb")
+
+	embeds = pickle.load(file)
+	embeds_copy = embeds
+	lst = []
+	for key,value in embeds.items():
+		lst.append(key)
+	print(len(key))
+	file.close()
+		
+	f = open("diff.txt","w")
+	threshold = .40#most important variable
+	filter_limit = 2
+	print(threshold)
+	cluster = {}
+	itr = 0
+
+	flag = True
+	while True:
+		length = len(lst)
+		cnt = 0
+		clus = {}
+		if not flag:
+			break
+	
+		print(threshold)
+		flag = False
+
+		visit = [0]*length
+		new_lst = []
+			
+		while  cnt!=length:
+			for i in range(length):
+				if visit[i] == 0:
+					visit[i] = 1
+					new_lst.append(lst[i])
+					cnt += 1
+					if itr == 0:
+						cluster[lst[i]] = []
+					break
+			
+			for j in range(i+1,length):
+					if visit[j] == 0:
+						diff = 0
+						#print(len(embeds[lst[i]]))
+						
+						for k in range(128):
+							diff +=  (embeds[lst[i]][k] - embeds[lst[j]][k])**2
+							f.write(str(itr) + " " + str(diff) + "\n")
+						"""
+						else:
+							diff = 0
+							for a in cluster[lst[i]]:
+								for b in cluster[lst[j]]:
+									diff += dis(embeds[a],embeds[b])
+
+							for a in cluster[lst[i]]:
+								diff += dis(embeds[a],embeds[lst[j]])
+
+							for b in cluster[lst[j]]:
+								diff += dis(embeds[lst[i]],embeds[b])
+
+							diff = diff/ ( ( len(cluster[lst[i]]) +1)*(len(cluster[lst[j]]) + 1 ) )
+						"""
+						
+						if diff < threshold:	
+							flag = True
+							cluster[lst[i]].append(lst[j])
+							visit[j] = 1
+							cnt += 1
+	
+							if itr > 0:
+								if lst[j] in cluster:
+									for vecs in cluster[lst[j]]:
+										cluster[lst[i]].append(vecs)
+									
+									
+									cluster[lst[j]] = []
+								
+								
+		if itr==0:  
+			for key,value in cluster.items():
+				lnt = len(cluster[key])
+				if lnt>0:
+					diff = embeds[key]
+					for j in value:
+						diff += embeds[j]
+					diff = diff/(len(cluster[key])+1)
+					embeds[key] = diff
+			
+		if itr>0:
+			for key,value in cluster.items():
+				lnt = len(cluster[key])
+
+				if lnt>0:
+					diff = embeds_copy[key]
+					for j in cluster[key]:
+						diff += embeds_copy[j]
+					diff = diff/(len(cluster[key])+1)
+					embeds[key] = diff
+			
+		lst = new_lst
+		print(itr)
+		itr += 1
+	
+
+
+	f.close()
+	final = {}
+	print(len(cluster),itr)
+	cnt = 0
+	cnt1 = 0
+
+	file = open(dr+"/../../../im2txt/ploc.pk","rb")
+	ploc = pickle.load(file)
+	file.close()
+	if not os.path.exists(dr + "/keys"):
+			os.makedirs(dr+"/keys")
+	
+	if upd:
+		f = open("kemb.pk","rb")
+		kemb = pickle.load(f)
+		f.close()
+
+		f = open("agcls.pk","rb")
+		old_cluster = pickle.load(f)
+		f.close()
+
+		for key, values in old_cluster.items():
+			for k,v in cluster.items():
+				if dis(kemb[key],embeds[k]) < 0.4:
+					ind = k.rfind("_")
+					name = k[:ind]
+					old_cluster[key].append(ploc[name])
+					for elements in v:
+						ind = elements.rfind("_")
+						name = elements[:ind]
+						old_cluster[key].append(ploc[name])
+						cluster[k] = []
+
+
+		for key,value in cluster.items():
+			if len(cluster[key]) > filter_limit:
+				old_cluster[key] = []
+				ind = key.rfind("_")
+				name = key[:ind]
+				old_cluster[key].append(ploc[name])
+				kemb[key] = embeds[key]
+				if os.path.isfile(dr+"/tmp/"+key):
+					shutil.copy(dr+"/tmp/"+key,dr+"/keys/")
+				for elements in cluster[key]: 
+					ind = elements.rfind("_")
+					name = elements[:ind]
+					old_cluster[key].append(ploc[name])
+
+
+		with open("agcls.pk","wb") as f:
+			pickle.dump(old_cluster,f)
+
+		with open("kemb.pk","wb") as f:
+			pickle.dump(kemb,f)
+
+	else :
+		kemb = {}
+		for key, val in cluster.items():
+			if len(cluster[key])>filter_limit:
+				kemb[key] = embeds[key]
+				final[key] = []
+				ind = key.rfind("_")
+				name = key[:ind]
+				final[key].append(ploc[name])
+				if os.path.isfile(dr+"/tmp/"+key):
+					shutil.copy(dr+"/tmp/"+key,dr+"/keys/")
+				for i in cluster[key]:
+					#print(i)
+					ind = i.rfind("_")
+					name = i[:ind]
+					final[key].append(ploc[name])
+				cnt +=1
+			elif len(cluster[key])>0:
+				cnt1+=1
+
+
+		print(cnt,cnt1)
+		print(time.time()-start_time)
+		with open("agcls.pk","wb") as f:
+			pickle.dump(final,f)
+
+		with open("kemb.pk","wb") as f:
+			pickle.dump(kemb,f)
+
+	if os.path.exists(dr+"/tmp"):
+			shutil.rmtree(dr+"/tmp")
+		
+
+
+def dis(vec1,vec2):
+	diff = 0
+	for i in range(128):
+		diff += (vec1[i] - vec2[i])**2
+
+	return diff
+
+
+
+-----------------------------------------------------------------------------------------------------------------------------
+
+The path of the file “clustering.py” in user’s computer is stored in “dr” variable. If “upd” is false “pte.pk” is loaded to “embeds” and “embeds_copy”. “pte.pk” consists of dictionary, mapping name of photos (facial crops) in “tmp” directory ( format - name_i.png where i is ith face detected in photo ) to their embedding. All the keys in “embeds” (i.e name of the crops) are copied to a list “lst”.
+
+“threshold” determines the maximum distance between two clusters for them to be merged into a single cluster. 
+
+“filter_limit” decides minimum number of photos that must be present in a cluster so that it is displayed in the application.
+
+“cluster” is a dictionary that has name of one of the facial crops as a key and names of all the other crops having similar faces as the value. The outer while loop runs until no more clusters can be merged.
+
+“visit” is a list that marks indices corresponding to image names in “lst” as 1 if they are either key or value in “cluster”. It is initialised with all elements as 0. 
+
+In inner while loop, the first for loop finds first index in “lst” such that “visit[index]” = 0.  After finding such element, “visit[index]” is made 1. 
+
+“new_lst” is another list which contains all the keys of “cluster” in a particular iteration of outer while loop.
+
+“cnt” keeps the count of total number of keys and values in “cluster”. When “cnt” = “length” (i.e length of “lst”) the inner while loop terminates as all the image names in “lst” are either keys or values of “cluster” ( i.e all the facial crops have been assigned to some cluster. )
+
+The “elements” found in first for loop are taken as keys of “cluster” in 0th iteration and “cluster[elements]” is initialised to a list. In all the subsequent iterations of outer while loop these keys are used so ”cluster[elements]” is initialised only once in iteration 0.
+
+The second for loop iterates over all the elements after the element in first for loop and finds elements such that they have not been marked visited yet. As the first for loop finds first element in “lst” which is not visited, all the elements before it are already visited (i.e they belong to some cluster). 
+
+When an element which has not been assigned any cluster is found, its distance (squared euclidean distance) from the key (element found in first for loop) is calculated. If the distance is less than 0.4(threshold), the element is appended to “cluster[key]” i.e it is assigned a cluster to which “key” belongs. After that it is marked visited so that it cannot be assigned any other cluster. “Cnt” is incremented by one.   
+When second for loop is over, the loop returns to while statement, checks if “cnt” equals “length” (all the elements have been assigned cluster or not). If condition is not true, the first for loop again finds the first element in “lst” which does not belong to any cluster, assigns it as a key (onl in “itr” = 0) and initialises “cluster[key]” as a list, increments count, the second for loop finds embeddings having distance less than 0.4 from it, appends them to “cluster[key]”  and increments cnt.
+After the inner while loop is over, all the elements belong to some cluster. Now centroid of each cluster is calculated, and stored in “embeds[key]” (which earlier contained embedding of the key of that cluster). After this “itr” = 0 is over. If any merging happens, in any iteration, “flag” is set to True so that next “itr” can continue.
+
+In the next iteration (“itr” = 1) of outer while loop, “lst” consists of all the keys from the first iteration (which act as centroids of their clusters as their embedding is also the embedding of the centroid of cluster). In inner while loop, visit is initialised to all zeros again. First element (i.e first centroid) in new “lst” not visited is found. As it is already a key of cluster, it consists of list of elements in its cluster. Therefore, it is not required to initialize it as a list again. Distance of centroid of other clusters is calculated from the current centroid, and those in range less than 0.4 are appended in the list (cluster[key]). But this time, the whole list of other cluster is appended including the key and after appending, the other cluster is made nil in “cluster” dictionary (“Cluster[lst[j]] = []”). Because when the inner while loop ends, and centroids of all the clusters are calculated again, and if “cluster[lst[j]]” is not made nil it will create an extra cluster ( one which is merged and one which is not ) and that will create logical error.
+After the inner while loop ends, again centroids are calculated. This time “embeds_copy” is used instead of “embeds” as it contains the original embeddings of the keys. “Embeds[key]” is assigned the centroid of the cluster. This ends “itr” 1.
+
+In subsequent iterations, again keys of previous iteration (representing centroids of all the clusters) are iterated and if two clusters are close (difference between centoids < 0.4 ), they are merged into one and other one is made nil in “cluster” dictionary.
+
+If in some iteration, no clusters are found in a range of 0.4 from each other, “flag” remains false and the outer while loop terminates in next iteration. “Cluster” consists of all the clusters. A new folder named “keys” is created (if it does not exist).All the clusters having size greater than “filter_limit” are included in “final” dictionary and their keys (face crops) are copied to “keys” folder. “Kembs” is a dictionary that stores all the keys in cluster and their embeddings i.e embeddings of centroid. These centroid embeddings are required in update operation. “Ploc.pk” consists of dictionary with image names as keys and their location as values. In “final” dictionary, the key remains the same as in “cluster” but values instead of being image names, as in “cluster[key]”, are paths of those image names. Path of image having key is also appended. “Tmp” directory consisting of all the facial crops is deleted. “Final” dictionary is pickled as “agcls.pk”. “Kembs” is pickled as “kembs.pk”
+
+Execution returns to crdb() function. Next command is self.init_data(). This command loads the pickled files into global dictionaries. Description is given on page 3. Next command is self.load_faces(). It loads the horizontal menu bar consisting of face crops stored in “keys” folder.
+
+-----------------------------------------------------------------------------------------------------------------------------
+Line 173
+
+    def load_faces(self):
+        if os.path.isfile( "agcls.pk"):
+            file = open("agcls.pk","rb")
+            self.face_dic = pickle.load(file)
+            self.face_dir = self.dr + "/../facenet/src/align/keys/"
+            file.close()
+            self.face_list = []
+            for key, value in self.face_dic.items():
+                self.face_list.append(key)
+            self.face_menu(0)
+
+-----------------------------------------------------------------------------------------------------------------------------
+
+It loads “agcls.pk” in “self.face_dic”. ”Self.face_dir” is the directory in which crops of keys are stored. All the key values are appended in self.face_list(). It then calls self.face_menu() passing 0 as parameter.
+
+-----------------------------------------------------------------------------------------------------------------------------
+
+Line 184
+
+    def face_menu(self,start_index):
+
+        for i in reversed(range(self.faces.count())): 
+            self.faces.itemAt(i).widget().setParent(None)
+
+        fl_len = len(self.face_list)
+        fm_len = 12
+
+        for i in range(fm_len):
+            if fl_len>start_index+i:
+                face_lbl = QLabel()
+                name = self.face_dir + self.face_list[start_index+i]
+                pixmap = QPixmap( name )
+                pixmap1 = pixmap.scaled(50,50,Qt.KeepAspectRatio)
+                face_lbl.setPixmap(pixmap1)
+                face_lbl.fileName = "face_" + self.face_list[start_index+i]
+                self.faces.addWidget(face_lbl)
+            else:
+                break
+
+        if start_index + fm_len< fl_len:
+            next_but = QPushButton("next")
+            next_but.clicked.connect(lambda : self.face_menu(start_index+fm_len))
+            self.faces.addWidget(next_but)
+
+        if start_index>0:
+            prev_but = QPushButton("prev")
+            prev_but.clicked.connect(lambda : self.face_menu(start_index-fm_len))
+            self.faces.addWidget(prev_but)
+
+-----------------------------------------------------------------------------------------------------------------------------
+
+The first two lines clear the horizontal layout. fm_len controls the number of faces to be displayed on the horizontal menu. It is set to 12.  Start_index is a parameter that tells the function the index in “self.face_list” from which to start displaying 12 faces. The QLabel that stores images in “self.face_list” also stores its name appended with “face_” in attribute “fileName”. This helps to display the elements in cluster when mouse is clicked on the key/face. 
+Self.faces is a horizontal Layout to which images are added. Two buttons “next” and “prev” are also added in the menu/horizontal layout depending upon if more keys are available after and before the keys being displayed. If more keys are present, clicking on next button will load the next 12 faces(or less if less are present in face_list) by incrementing start_index by 12. Similarly if there are keys in list  before the ones being displayed in application, clicking the previous button will load the previous 12 faces by decrementing start_index by 12.
+
+
+
+
+3) Update Database
+
+When “update database” option is clicked, self.crdb is called again but with parameter “upd” = true. All the operations are similar to those carried out while creating database. Find_images is called with “Processing” module to find all the images. The older list of image paths exists in “self.photos”  (initialised from “photos.pk” in self.init_data() when application is launched ). The older and new image paths are compared and those which do not exist in older list are appended in “new_photos”. The updated list (old + new image paths) is again pickled in “photos.pk” and updated “ploc” dictionary mapping image names to their paths is also pickled. If new photos exist i.e ( length(new_photos > 0) ), image captioning and face detection algorithms are called with “Processing” module to execute them in parallel processes. In captioning, “upd” is passed as True. In run_inference.py (captioning algorithm) Older dictionary mapping image paths to their captions in “open.pk” is loaded in “result” dictionary. The new image paths are included in the older dictionary as keys and their captions are included as values. The updated dictionary is again pickled as “open.pk”.
+The face detection algorithm again creates “tmp” folder and stores all the facial crops identified in new photos in that folder. After that main_embed() is called with “upd” parameter as True. The older dictionary mapping image names ( format - original_name_i.png  where i is ith face found in original image) to their embeddings is loaded from “pte.pk” into “ind_embed”. The embeddings of new face crops are included in “ind_embed” and it is again pickled to “pte.pk”. “ue” is intialized to a dictionary and consists of embeddings of only new face crops.
+It is pickled to “ue.pk”
+Next cluster_faces() is called. It uses embeddings in “ue.pk” to cluster the new embeddings. When clustering is done, the old cluster is loaded to “old_cluster” from “agcls.pk”. The centroid embeddings of old cluster are loaded from “kemb.pk” to “kemb”. Then distance between all the old centroids and new centroids is calculated. If any two centroids have distance less than 0.4 the new cluster is merged into the old one and is made nil in “cluster” dictionary. Only one iteration is carried out. After this, the remaining clusters in “cluster” having size greater than “filter_limit” are all included in “old_cluster” and their keys (face crop) is copied to “keys” folder. The centroid embeddings of new clusters are added in “kemb”. “Old_cluster” is pickled to “agcls.pk” and “kemb” is pickled to “kemb.pk”. Execution again returns to self.crdb(), faces are loaded in horizontal menu and application is ready for search query and displaying the clusters formed.
+
+
+
+
+4) Search Query
+
+When “search query” is clicked , search() is called.
+
+-----------------------------------------------------------------------------------------------------------------------------
+
+Line 324
+
+def search(self):
+        self.qle.clearFocus()
+        sent = self.qle.text()
+        terms = sent.split()
+        fin = []
+        for term in terms:
+            if term not in self.stop_words:
+                fin.append(term)
+                #print(term)
+
+        
+        
+        index = len(self.data)
+
+        self.final = []
+        dic = {}
+        for key,value in self.data.items():
+            for term in fin:
+                if "caption_0" in self.data[key] and term in self.data[key]["caption_0"].split():
+                    if key in dic:
+                        dic[key]["cnt"] += 1
+                    else:
+                        dic[key] = {"caption_0":self.data[key]["caption_0"],"cnt":1}
+                        
+        
+        for key,value in dic.items():
+            tmp = {"path":key,"caption_0":value["caption_0"],"cnt":value["cnt"]}
+            self.final.append(tmp)
+    
+
+        self.final = sorted(self.final, key=itemgetter('cnt'), reverse=True)
+        self.start = 0
+        self.display(self.start)
+
+-----------------------------------------------------------------------------------------------------------------------------
+
+
+First it clears the focus from textbox (remove cursor from textbox after search query is clicked), so that application can handle keyboard events (use of arrow keys to navigate through results). self.qle.txt() is the search query entered in the box. The words in query are split and stored in “terms” list. All the words that are not in self.stop_words list (a,an,the .. etc.) are appended to “fin” list. This is required because if stop words are not removed and search query contains words like “a” (“a man walking on a road”) then all the images will be returned as result because “a” would be there in caption of every image and it would not be a helpful result . self.final is initialised to a list. It will consist of the results of the query. All the words in “fin” are searched in every caption stored in “self.data” (loaded from open.pk in self.init_data() called at the launch of application). 
+self.data consists of image path as key. Self.data[key] is a dictionary consisting of three captions generated from im2txt with keys being “caption_0”, “caption_1” and “caption_2”. Only “caption_0” is searched for a match and displayed in results as it has the highest probability of describing the image properly. If a word in “fin” is present in “caption_0” of self.data[key], then that key is made key of “dic” and dic[key] is initialised as a dictionary with two keys - one being caption and other being count of number of matches in caption and words in “fin”(initialised to one). Every time a word in “fin” matches a word in “caption_0” of self.data[key], cnt is incremented by one. The “dic” contains all the results with image path being key, caption being dic[key][“caption_0”] and number of word matches with search query being dic[key][“cnt”]. 
+“dic” cannot be iterated with numbered indexes as it is a dictionary. To display results we need something which can be iterated with numbers because it will be easier to display previous and next results then. So the dictionary is copied to a list “self.final”. Each element in final is a dictionary consisting of image path, caption, and number of matches with search query.“self.final” is sorted such that results having highest number of matches appear first.  
+
+self.display(self.start) is called next. (self.start = 0)
+
+
+-----------------------------------------------------------------------------------------------------------------------------
+
+Line 359
+
+    def display(self,start):
+        self.start = start
+        self.lim = len(self.final)
+        self.display_limit = 6
+        self.col = 3
+        
+        for i in reversed(range(self.grid.count())): 
+            self.grid.itemAt(i).widget().setParent(None)
+       
+        var = False
+        if start + self.display_limit < self.lim:
+            cnt = self.display_limit
+            var = True
+            #print(start)
+        else:
+            cnt = self.lim-start
+
+        self.ind = math.ceil(  cnt/self.col )
+            
+        lbl_count = QLabel()
+        
+        lbl_count.setText(str(start if cnt<1 else start+1) + " - " + str(start+cnt) + " of "  + str(self.lim) + " results." )
+
+        self.grid.addWidget(lbl_count,0,0)
+
+
+        cont_matrix = [[],[]]
+        for i in range(1,self.ind+1):
+            for j in range(self.col):
+                if( start+ (i-1)*self.col+j< self.lim ):
+                    
+                    desc = QVBoxLayout()
+                    dec = False
+                    lbl_img = QLabel()
+
+                    lbl_img.fileName = "image" 
+                    
+                    if os.path.isfile(self.final[start + (i-1)*self.col+j]["path"]):
+                        pixmap = QPixmap( self.final[start + (i-1)*self.col+j]["path"])
+                        pixmap1 = pixmap.scaled(200,200,Qt.KeepAspectRatio)
+                        lbl_img.setPixmap(pixmap1)
+                        
+                    else:
+                        lbl_img.setText("Image not found.")
+
+                    
+                    lbl_path = QLabel()
+                    lbl_path.setText(self.final[start+(i-1)*self.col+j]["path"])
+                    
+                    lbl_caption = QLabel()
+                    lbl_caption.setText(self.final[start+(i-1)*self.col+j]["caption_0"])
+                    
+                    desc.addWidget(lbl_img)
+                    desc.addWidget(lbl_path)
+                    desc.addWidget(lbl_caption)
+                    cont = QWidget()
+                    cont.setLayout(desc)
+                    #print(self.final[start + (i-1)*self.col+j]["cnt"])
+                    self.grid.addWidget(cont, i,j)
+                    
+
+        if start >= self.display_limit:
+            prev = QPushButton("< prev")
+            prev.clicked.connect(lambda: self.display(self.start-self.display_limit) )
+            self.grid.addWidget(prev,self.ind+1,0)
+
+        if var:
+            nxt = QPushButton("next >")
+            nxt.clicked.connect(lambda: self.display(self.start+self.display_limit))
+            self.grid.addWidget(nxt,self.ind+1,self.col-1)
+
+----------------------------------------------------------------------------------------------------------------------------- 
+
+“self.start” is the index in “self.final” from which the next six images are shown in the grid. 
+
+“self.display_limit” controls the number of images to be shown in the grid at a time.  It is set to 6.
+
+“self.col” is the number of columns in which the images are to be shown in grid. It is set to 3.
+
+The next two lines clear the grid.
+
+“cnt” adjusts the number of images to be shown according to the number of images available in “self.final”. For example, if there are 8 images in “self.final” , first six images will be shown and on clicking next, only two images will be shown.  
+
+“Self.ind” decides number of rows depending on available images. If less than 4 images are remaining only one row will be displayed and if there are more images, two rows will be displayed.
+
+A label “lbl_count” shows the current index of results as well as total number of results. Example - “1-6 of 12 results.”
+The label is added to grid in row 0 and column 0.
+
+The two nested for loops add a vertical Layout for each of the six results starting from index “start” in “final” list. Each vertical Layout consists of three labels - one for image, one for image path, one for caption. Each label is given an attribute “fileName” whose value is “image”. This helps in handling mouse events. The images are resized to 200 x 200. If an image is not found at its path (due to deletion), instead of image a label “image not found” is shown. Each Layout is then put in a widget because it is easy to handle mouse events with widgets. This widget is then added to grid in correct row and column.
+
+If more images are there in self.final, next button is added in bottom right corner, and if there are images before the ones being displayed in self.final then a previous button is added at bottom left corner. Clicking the button calls the same function with a change in “start” parameter. If next is clicked, “start + 6” is sent as parameter, and if previous is clicked then “start-6” is sent as parameter.
+
+
+
+
+5) Mouse Events
+
+Mouse Events are handled by overwriting mousePressEvent() function.
+
+----------------------------------------------------------------------------------------------------------------------------- 
+Line 49
+
+def mousePressEvent(self,event):
+        wid = self.vwid.childAt(event.pos())
+        try:
+            if wid.fileName[:4] == "face":
+                name = wid.fileName[5:]
+                #print(name)
+                
+                ind2 = name.rfind("_")
+                orig_name = name[:ind2]
+                self.final = []
+                for i in self.face_dic[name]:
+                    tmp = {"path":i,"caption_0":self.data[i]["caption_0"]}
+                    self.final.append(tmp)
+                    #print(orig_name)
+                    
+                self.display(0)
+
+            else: 
+                pa = wid.parent()
+                ch = pa.children()
+                #print(ch[2].text())
+                self.img_dir = ch[2].text()
+                if self.img_dir[-4:] in self.formats or self.img_dir[-5:] in self.formats:
+                    self.dialog = Photo()
+                    self.dialog.initUI(ex)
+                    self.vwid.setFocus()
+                #self.setFocusPolicy(Qt.StrongFocus)
+        except Exception as e:
+            print("error"  + str(e))
+
+-----------------------------------------------------------------------------------------------------------------------------
+
+mousePressEvent handles two events - 
+1)	Clicking on results to show them in bigger size on a new window.
+2)	Clicking on face icons to show their cluster.
+
+The first line finds the child widget present at position where mouse is clicked and returns it to “wid”. Next all instructions are carried out in try-except block (although it is not required). The images in face menu as well as in results shown in grid have an attribute “fileName”. For images in face menu its value is “face_filename” where filename is name of the image and for results in grid the value is “image”. When a mouse is clicked anywhere in application, the child widget at that position is returned to wid. Next it is checked if the widget has any attribute “fileName”. If so, it is sure that mouse has been clicked either at a face or a result at grid. Next the value of attribute is checked. 
+
+If the first four values of “fileName” are “face”, then a face in face menu is clicked. In that case the cluster belonging to that face needs to be displayed. The whole “fileName” is “face_filename” where “filename” is name of image. The name of the image is extracted from “fileName” attribute. self.face_dic consists of whole cluster in “agcls.pk” . It is initialized during launch of application in self.load_faces() called from self.initUI. The name of the image is a key of the cluster. “Self.face_dic[image name]” contains all the images in its cluster. It is iterated, and “self.final” list is prepared by adding image, its path and its caption ( from “self.data”  initialised in self.init_data) in a dictionary and appending it to the list. After this all the results are in “self.final”. self.dispaly(0) is called . It shows the first six image results in self.final.
+
+If the value of “fileName” is “image”, then one of the six results is clicked. In that case the result needs to be shown in bigger size in a new window. The image, image path as well as the caption in result have the attribute “fileName” as “image”. So clicking on any of the three will show the image in bigger size. The results are arranged in a vertical Layout inside a widget named “container”.  The first line in second “if” statement returns the parent widget i.e “container”. The parent widget is “container” widget. pa.children() returns a list with four elements of “container”- one vertical layout and three labels for image, path and caption. The index of image path in that list is 2.  The image path is extracted from the label and it is showed in bigger size by creating an instance of “photo” class and passing the image path as parameter. So even if the caption in result is clicked, the parent of label containing caption is accessed. From the parent, a list of children is acquired which contains label with image path at second (0-indexing) position. This is how the image path is extracted from mouse click anywhere on the result.
+
+
+-----------------------------------------------------------------------------------------------------------------------------
+
+Line 23
+
+class Photo(QWidget):
+    def __init__(self,parent=None):
+        super(Photo,self).__init__()
+    
+    def initUI(self,img_path):
+        pixmap = QPixmap(img_path)
+        if( pixmap.height()>1080 or pixmap.width()>680 ):
+            pixmap = pixmap.scaled(1080,680,Qt.KeepAspectRatio)
+        lbl_img = QLabel()
+        lbl_img.setPixmap(pixmap)
+        vbox = QVBoxLayout()
+        vbox.addWidget(lbl_img)        
+        self.setLayout(vbox)
+        self.move(0,0)
+        self.show()
+
+-----------------------------------------------------------------------------------------------------------------------------
+
+Creating a new class creates a new window to display its contents. If the image size is bigger than screen resolution ( 1080 x 680 ) the image is resized to 1080 x 680 so that it does not go out of the screen. The rest of the code is a simple code which puts image in a vertical Layout and sets the Layout of the window to it. self.show() displays the photo in a new window on screen.
+
+
+
+6) Keyboard Events
+
+There is only one keyboard event supported. Use of arrow keys to navigate through results.
+
+-----------------------------------------------------------------------------------------------------------------------------
+
+Line 80
+
+ def keyPressEvent(self,event):
+       
+        if event.key() == Qt.Key_Left:
+            if hasattr(self.grid.itemAtPosition(self.ind+1,0),'widget'):
+                self.start -= self.display_limit
+                self.display(self.start)
+
+        if event.key() == Qt.Key_Right:
+            if hasattr(self.grid.itemAtPosition(self.ind+1,self.col-1),'widget'):
+                self.start +=self.display_limit
+                self.display(self.start)
+
+-----------------------------------------------------------------------------------------------------------------------------
+
+On pressing left arrow key, the application enters in first “if” condition. It checks whether “previous” button is present in application. The “previous” button’s position is row - self.ind+1, column - 0 in the grid. If the grid has a widget attribute at that position, it means the “previous button” is present. If previous button is present the results are also there in the grid and there are images in “self.final” before the ones being displayed. “self.start” is decremented by 6 and passed to self.dislay() function to show the previous six images. “self.start” is deducted before because if it is not deducted and “self.start - 6 “ is passed as parameter and left arrow is pressed two times, the value of “self.start” will not change. First time previous six results will be shown but next time previous six won’t be shown because the value of “self.start” never changed.  Similar is the case with pressing right arrow key.  
